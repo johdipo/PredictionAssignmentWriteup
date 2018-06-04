@@ -1,0 +1,103 @@
+---
+title: "Prediction Assignment Writeup"
+author: "Johan Di Pietrantonio"
+date: "4 juin 2018"
+output: html_document
+---
+
+## Introduction
+"Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E)."
+The goal of your project is to predict which classe.
+
+Data are available online at  [http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har]( http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har)
+
+## Analysis
+
+```{r libraries, message = FALSE, warning=FALSE}
+suppressPackageStartupMessages(library(caret))
+suppressPackageStartupMessages(library(rpart))
+suppressPackageStartupMessages(library(rattle))
+```
+
+### Downloading the data
+```{r downloading}
+rawData <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", na.strings = c("NA", "", "#DIV0!"))
+```
+
+### Pre-processing
+
+```{r exploratory}
+head(colnames(rawData), n=20)
+```
+
+Keeping only the relevant variables by removing variables unrelated to  measurements and by removing incomplete variables (NAs)
+```{r pre-processing}
+data <- rawData[, -c(1:7)]
+data <- data[, colSums(is.na(data)) == 0]
+colnames(data)
+summary(data[,1:6])
+```
+
+### Data partition
+Partitioning the training data into a training dataset (80%) and a testing dataset (20%)
+
+```{r partition}
+inTrain <- createDataPartition(y=data$classe,p=0.8,list = FALSE)
+train <- data[inTrain,]
+test <- data[-inTrain,]
+dim(train);dim(test)
+
+
+
+```
+### Preditive models
+The strategy is to try multiple classifier algorithm, including random forest, generalized boosted models and decision tree and to compare their accuracy on the test test.
+
+
+#### Model 1: Random forest
+```{r model1}
+set.seed(239)
+trControl <- trainControl(method = "cv",number = 3)
+model1RF <- train(classe ~ ., data=train, method="rf",trControl=trControl)
+model1RFPred <- predict(model1RF,test)
+model1RFConf <- confusionMatrix(model1RFPred, test$classe)
+model1RFConf
+```
+
+#### Model 2: Boosting
+```{r model2,results="hide", message = FALSE, warning=FALSE}
+set.seed(089)
+trControl2 <- trainControl(method = "cv",number = 3)
+model2B <- train(classe ~ ., data=train, method="gbm",trControl=trControl2)
+model2BPred <- predict(model2B,test)
+model2BConf <- confusionMatrix(model2BPred, test$classe)
+```
+```{r model2results,echo=FALSE}
+model2BConf
+```
+
+#### Model 3: Classification tree
+```{r model3, warning=FALSE}
+model3CT <- rpart(classe ~ .,data=train,method="class")
+model3CTPred <- predict(model3CT,test,type="class")
+model3CTConf <- confusionMatrix(model3CTPred, test$classe)
+model3CTConf
+```
+
+Showing the decision tree of the model 3.
+```{r model3Tree}
+fancyRpartPlot(model3CT)
+```
+
+#### Model prediction summary
+
+```{r summary}
+modelSummary <- data.frame(modelName = c("Random forest","Boosting","Decision tree"),accuracy=c(model1RFConf$overall[1],model2BConf$overall[1],model3CTConf$overall[1]))
+modelSummary
+```
+
+## Conclusion
+Both the random forest and the boosting algorithm show near perfect prediction on the testing data set, random forest being slightly better.
+
+## References
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
